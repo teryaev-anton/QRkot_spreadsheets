@@ -1,3 +1,4 @@
+from copy import deepcopy
 from datetime import datetime
 from typing import List
 
@@ -5,28 +6,46 @@ from aiogoogle import Aiogoogle
 
 from app.core.config import settings
 
+FORMAT = '%Y/%m/%d %H:%M:%S'
+TITLE = 'QRKot_Отчет на {now_date_time}'
+ROW_COUNT = 100
+COLUMN_COUNT = 3
+SHEET_ID = 0
+SHEET_TITLE = 'Топ проектов по времени сбора'
+SPREADSHEET_BODY = dict(
+    properties=dict(
+        title=TITLE.format(now_date_time=datetime.now().strftime(FORMAT)),
+        locale='ru_RU',
+    ),
+    sheets=[dict(properties=dict(
+        sheetType='GRID',
+        sheetId=SHEET_ID,
+        title=SHEET_TITLE,
+        gridProperties=dict(
+            rowCount=ROW_COUNT,
+            columnCount=COLUMN_COUNT,
+        )
+    ))]
+)
+TABLE_HEADER = [
+    ['Отчет от', datetime.now().strftime(FORMAT)],
+    ['Топ проектов по скорости закрытия'],
+    ['Название проекта', 'Время сбора', 'Описание']
+]
+
 
 async def spreadsheets_create(wrapper_services: Aiogoogle) -> str:
     """Cоздание гугл-таблицы"""
-    now_date_time = datetime.now().strftime('%Y/%m/%d %H:%M:%S')
     service = await wrapper_services.discover('sheets', 'v4')
-    spreadsheets_body = {
-        'properties': {'title': f'QRKot_Отчет на {now_date_time}',
-                       'locale': 'ru_RU'},
-        'sheets': [{
-            'properties': {'sheetType': 'GRID',
-                           'sheetId': 0,
-                           'title': 'Топ проектов по времени сбора',
-                           'gridProperties': {'rowCount': 100,
-                                              'columnCount': 3}
-                           }
-        }]
-    }
+    spreadsheets_body = deepcopy(SPREADSHEET_BODY)
+    spreadsheets_body['properties']['title'] = TITLE.format(
+        now_date_time=datetime.now().strftime(FORMAT)
+    )
     response = await wrapper_services.as_service_account(
         service.spreadsheets.create(json=spreadsheets_body)
     )
-    spreadsheetid = response['spreadsheetId']
-    return spreadsheetid
+    spreadsheet_id = response['spreadsheetId']
+    return spreadsheet_id
 
 
 async def set_user_permissions(
@@ -55,20 +74,15 @@ async def spreadsheets_update_value(
     wrapper_services: Aiogoogle
 ) -> None:
     """Обновление гугл-таблицы"""
-    now_date_time = datetime.now().strftime('%Y/%m/%d %H:%M:%S')
     service = await wrapper_services.discover('sheets', 'v4')
+    table_header = deepcopy(TABLE_HEADER)
+    table_header[0][1] = datetime.now().strftime(FORMAT)
     table_values = [
-        ['Отчет от', now_date_time],
-        ['Топ проектов по скорости закрытия'],
-        ['Название проекта', 'Время сбора', 'Описание']
+        *table_header,
+        *[list(map(str, [
+            attr.name, attr.close_date - attr.create_date, attr.description
+        ])) for attr in projects],
     ]
-    for project in projects:
-        new_row = [
-            str(project['name']),
-            str(project['period']),
-            str(project['description'])
-        ]
-        table_values.append(new_row)
     update_body = {
         'majorDimension': 'ROWS',
         'values': table_values

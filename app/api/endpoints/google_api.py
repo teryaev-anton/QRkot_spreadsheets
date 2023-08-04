@@ -1,5 +1,5 @@
 from aiogoogle import Aiogoogle
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_async_session
@@ -27,8 +27,14 @@ async def get_report(
     )
     spreadsheetid = await spreadsheets_create(wrapper_services)
     await set_user_permissions(spreadsheetid, wrapper_services)
-    await spreadsheets_update_value(
-        spreadsheetid,
-        projects,
-        wrapper_services)
+    try:
+        await spreadsheets_update_value(
+            spreadsheetid,
+            projects,
+            wrapper_services)
+    except ValueError as error_message:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error_message)
+        )
     return projects

@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,21 +25,15 @@ class CRUDCharityProject(CRUDBase):
     async def get_projects_by_completion_rate(
         self,
         session: AsyncSession
-    ) -> List[Dict[str, str]]:
+    ) -> List[CharityProject]:
         """Получение списка проектов отсортированных по времени сбора"""
         projects = await session.execute(
             select([CharityProject]).where(CharityProject.fully_invested)
         )
-        projects = projects.scalars().all()
-        project_list = []
-        for project in projects:
-            project_list.append({
-                'name': project.name,
-                'period': project.close_date - project.create_date,
-                'description': project.description
-            })
-        project_list = sorted(project_list, key=lambda x: x['period'])
-        return project_list
+        return sorted(
+            projects.scalars().all(),
+            key=lambda obj: obj.close_date - obj.create_date
+        )
 
 
 charity_project_crud = CRUDCharityProject(CharityProject)
